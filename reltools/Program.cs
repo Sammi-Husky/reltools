@@ -246,12 +246,12 @@ namespace reltools
             Console.WriteLine("      Extracts and dissassembles rel file(s) to text files.");
             Console.WriteLine("  -r, --rebuild:");
             Console.WriteLine("      Rebuilds rel file(s) from source files when given a json target.");
-            Console.WriteLine("  -m, --map [path]:");
+            Console.WriteLine("  -m, --map [file(s)/folder]:");
             Console.WriteLine("      Specifies map file(s) used for resolving symbols.");
             Console.WriteLine("  -g, --genmap:");
             Console.WriteLine("      Generates a map file from the target(s)");
             Console.WriteLine("  -o, --output [path]:");
-            Console.WriteLine("      Sets output file or folder");
+            Console.WriteLine("      Sets output directory");
             Console.WriteLine("\nUsage: reltools.exe [options] [targets]");
         }
         private static string[] GatherFiles(string directory, string pattern, bool recursive)

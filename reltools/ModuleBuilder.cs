@@ -273,8 +273,11 @@ namespace reltools
         }
         private void AddLabel(string label, SDefLine line)
         {
-            if (LocalLabels.ContainsKey(label))
+            string mangled = SymbolUtils.MangleSymbol(Info.ModuleID, line.section, label);
+            if (LocalLabels.ContainsKey(label) || LocalLabels.ContainsKey(mangled))
+            {
                 return;
+            } 
 
             switch (label)
             {
@@ -284,16 +287,13 @@ namespace reltools
                     LocalLabels.Add(label, line);
                     break;
                 default:
-                    LocalLabels.Add(SymbolUtils.MangleSymbol(Info.ModuleID, line.section, (int)line.offset, label), line);
+                    LocalLabels.Add(mangled, line);
                     break;
             }
         }
         private void AddCommandToSection(RelTag tag, SDefLine line, ModuleSectionNode section)
         {
-            if (tag is null)
-                return;
-
-            string mangled = SymbolUtils.MangleSymbol((int)tag.TargetModule, tag.TargetSection, (int)line.offset, tag.Label);
+            string mangled = SymbolUtils.MangleSymbol((int)tag.TargetModule, tag.TargetSection, tag.Label);
             uint targetOffset;
             Symbol sym = SymbolMap.GetSymbol(tag.TargetModule, tag.TargetSection, tag.Label);
             if (sym != null)

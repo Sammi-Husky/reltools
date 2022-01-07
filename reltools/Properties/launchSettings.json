@@ -4,6 +4,11 @@
       "commandName": "Project",
       "commandLineArgs": "-r src -m maps -o bin",
       "workingDirectory": "C:\\Users\\sammi\\Desktop\\reltests"
+    },
+    "Dump": {
+      "commandName": "Project",
+      "commandLineArgs": "rels -m maps -o src",
+      "workingDirectory": "C:\\Users\\sammi\\Desktop\\reltests"
     }
   }
 }

@@ -224,21 +224,20 @@ namespace reltools.Symbols
     }
     public static class SymbolUtils
     {
-        public static string MangleSymbol(int moduleID, int sectionID, int sectionOffset, string symbol)
+        public static string MangleSymbol(int moduleID, int sectionID, string symbol)
         {
             string module = moduleID.ToString();
             string section = sectionID.ToString();
-            string offset = sectionOffset.ToString();
-            return $"__M{module.Length}{module}S{section.Length}{section}S{offset.Length}{offset}L{symbol.Length}{symbol}";
+            return $"__M{module.Length}{module}S{section.Length}{section}L{symbol.Length}{symbol}";
         }
 
         public static string DemangleSymbol(string symbol)
         {
-            var matches = Regex.Matches(symbol, @"([MSOL]{1}\d+)");
+            var matches = Regex.Matches(symbol, @"([MSL]{1}\d+)");
             if (matches.Count == 4)
             {
-                var len = Convert.ToInt32(matches[3].Value.Substring(1));
-                return symbol.Substring(matches[3].Index + matches[2].Length, len);
+                var len = Convert.ToInt32(matches[2].Value.Substring(1));
+                return symbol.Substring(matches[2].Index + matches[2].Length, len);
             }
             return symbol;
         }

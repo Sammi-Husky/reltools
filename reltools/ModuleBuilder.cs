@@ -3,14 +3,14 @@ using BrawlLib.SSBB.ResourceNodes;
 using BrawlLib.SSBB.Types;
 using Newtonsoft.Json;
 using reltools.json;
+using reltools.Symbols;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using reltools.Symbols;
 using System.Text.RegularExpressions;
-using System.Diagnostics;
 
 namespace reltools
 {
@@ -277,7 +277,7 @@ namespace reltools
             if (LocalLabels.ContainsKey(label) || LocalLabels.ContainsKey(mangled))
             {
                 return;
-            } 
+            }
 
             switch (label)
             {
@@ -354,7 +354,7 @@ namespace reltools
         {
             var baseDir = Path.GetDirectoryName(filepath);
             StringBuilder sb = new StringBuilder();
-            using(var reader = File.OpenText(filepath))
+            using (var reader = File.OpenText(filepath))
             {
                 while (!reader.EndOfStream)
                 {

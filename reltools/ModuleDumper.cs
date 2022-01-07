@@ -3,13 +3,13 @@ using BrawlLib.Internal.PowerPCAssembly;
 using BrawlLib.SSBB.ResourceNodes;
 using Newtonsoft.Json;
 using reltools.json;
+using reltools.Symbols;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using reltools.Symbols;
 
 namespace reltools
 {

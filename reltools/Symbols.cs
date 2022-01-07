@@ -1,6 +1,4 @@
-﻿using BrawlLib.SSBB.ResourceNodes;
-using BrawlLib.SSBB.Types;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;

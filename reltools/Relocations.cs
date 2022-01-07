@@ -1,4 +1,4 @@
-using System;using System.Text.RegularExpressions;using BrawlLib.SSBB.ResourceNodes;namespace reltools{
+using BrawlLib.SSBB.ResourceNodes;using System;using System.Text.RegularExpressions;namespace reltools{
     internal class RelTag
     {
         public RelTag(PPCRelType command, uint targetModule, int targetSection, string label)

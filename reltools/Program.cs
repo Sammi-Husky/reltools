@@ -1,10 +1,9 @@
 ﻿using BrawlLib.SSBB.ResourceNodes;
+using reltools.Symbols;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using reltools.Symbols;
 using System.Linq;
-using System.Threading;
 
 namespace reltools
 {
@@ -213,7 +212,7 @@ namespace reltools
                                 {
                                     mapfiles.Add(args[x]);
                                     i++;
-                                } 
+                                }
                                 else if (Directory.Exists(args[x]))
                                 {
                                     mapfiles.AddRange(GatherFiles(args[x], "*.map", true));

@@ -263,9 +263,9 @@ namespace System.IO
 
 
             //while (!proc.StandardError.EndOfStream)
-            //sb.Append(proc.StandardError.ReadLine() + "\n");
+                //sb.Append(proc.StandardError.ReadLine() + "\n");
             //while (!proc.StandardOutput.EndOfStream)
-            //sb.Append(proc.StandardOutput.ReadLine() + "\n");
+                //sb.Append(proc.StandardOutput.ReadLine() + "\n");
             sb.Append(proc.StandardError.ReadToEnd());
             sb.Append(proc.StandardOutput.ReadToEnd());
 

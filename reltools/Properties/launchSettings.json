@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "reltools": {
+      "commandName": "Project",
+      "commandLineArgs": "-r src -m maps -o bin",
+      "workingDirectory": "C:\\Users\\sammi\\Desktop\\reltests"
+    }
+  }
+}

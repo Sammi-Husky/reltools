@@ -14,7 +14,7 @@ using System.Diagnostics;
 
 namespace reltools
 {
-    public class SDefLine
+    public struct SDefLine
     {
         public int section;
         public string data;
@@ -95,7 +95,7 @@ namespace reltools
                     s._isCodeSection = sectionInfo.HasCode;
 
                     string sectionPath = Path.Combine(RootPath, sectionInfo.Path);
-                    string asm = File.ReadAllText(sectionPath);
+                    string asm = GetSource(sectionPath);
 
                     // compiles asm source and returns
                     // GAS Listing + section bytes
@@ -158,8 +158,8 @@ namespace reltools
             StringBuilder err = new StringBuilder();
             sectionData = null;
 
-            // comment out reltags since GAS since
-            // GAS will error encountering them
+            // comment out reltags since GAS
+            // will error encountering them
             asm = Regex.Replace(asm, @"(\[.*)", @"#$1");
 
             // convert tabs to spaces
@@ -168,7 +168,6 @@ namespace reltools
             // write modified source to temp file
             var tmpSrc = Path.GetTempFileName();
             var tmpBin = Path.GetTempFileName();
-            var tmpOut = Path.GetTempFileName();
             File.WriteAllText(tmpSrc, asm);
 
             var proc = new Process
@@ -185,11 +184,12 @@ namespace reltools
             };
             proc.Start();
             var listing = proc.StandardOutput.ReadToEnd();
-            err.AppendLine(proc.StandardError.ReadToEnd());
+            err.Append(proc.StandardError.ReadToEnd());
             proc.WaitForExit();
 
             // call objcopy
-            err.AppendLine(Util.StartProcess("lib/powerpc-eabi-objcopy.exe", $"-O binary \"{tmpBin}\" \"{tmpOut}\""));
+            var tmpOut = Path.GetTempFileName();
+            err.Append(Util.StartProcess("lib/powerpc-eabi-objcopy.exe", $"-O binary {tmpBin}  {tmpOut}"));
 
             // if no errors, get file bytes
             string error = err.ToString();
@@ -349,6 +349,31 @@ namespace reltools
                     }
                 }
             }
+        }
+        private string GetSource(string filepath)
+        {
+            var baseDir = Path.GetDirectoryName(filepath);
+            StringBuilder sb = new StringBuilder();
+            using(var reader = File.OpenText(filepath))
+            {
+                while (!reader.EndOfStream)
+                {
+                    string line = reader.ReadLine();
+
+                    // handle includes by just copying the included
+                    // file contents at the current location. This
+                    // is functionally identical to GAS
+                    if (line.Contains(".include"))
+                    {
+                        string includePath = Regex.Match(line, "\"([^\"]*)\"").Groups[1].Value;
+                        sb.Append(GetSource(Path.Combine(baseDir, includePath)));
+                        continue;
+                    }
+
+                    sb.AppendLine(line);
+                }
+            }
+            return sb.ToString();
         }
     }
 }

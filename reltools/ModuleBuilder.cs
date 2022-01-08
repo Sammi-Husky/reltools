@@ -174,7 +174,7 @@ namespace reltools
             ProcResult asResult = Util.StartProcess("lib/powerpc-eabi-as.exe",
                                                     "-mgekko",
                                                     "-mregnames",
-                                                    "-al",
+                                                    "-alc",
                                                     "--listing-rhs-width=900",
                                                     $"\"{tmpSrc}\"",
                                                     $"-o \"{tmpBin}\"");

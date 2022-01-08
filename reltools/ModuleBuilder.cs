@@ -144,7 +144,7 @@ namespace reltools
 
             // call dispose explicitely here to prevent
             // a strange race condition in brawllib
-            n.Dispose();
+            //n.Dispose();
         }
         /// <summary>
         /// Compiles GNU assembly code input and generates 
@@ -152,15 +152,14 @@ namespace reltools
         /// </summary>
         /// <param name="asm">GNU Assembly source code</param>
         /// <param name="sectionData">compiled machine code bytes</param>
-        /// <returns>GAS Listing</returns>
+        /// <returns>GAS Listing split by newline</returns>
         private string Compile(string asm, out byte[] sectionData)
         {
-            StringBuilder err = new StringBuilder();
             sectionData = null;
 
             // comment out reltags since GAS
             // will error encountering them
-            asm = Regex.Replace(asm, @"(\[.*)", @"#$1");
+            asm = RelTag.TagRegex.Replace(asm, @"#!RT!$0");
 
             // convert tabs to spaces
             asm = asm.Replace("\t", "    ");
@@ -168,42 +167,36 @@ namespace reltools
             // write modified source to temp file
             var tmpSrc = Path.GetTempFileName();
             var tmpBin = Path.GetTempFileName();
+            var tmpOut = Path.GetTempFileName();
             File.WriteAllText(tmpSrc, asm);
 
-            var proc = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "lib/powerpc-eabi-as.exe",
-                    Arguments = $"-mgekko -mregnames -al --listing-rhs-width=200 \"{tmpSrc}\" -o \"{tmpBin}\"",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                }
-            };
-            proc.Start();
-            var listing = proc.StandardOutput.ReadToEnd();
-            err.Append(proc.StandardError.ReadToEnd());
-            proc.WaitForExit();
+            // assemble source code + generate listing
+            ProcResult asResult = Util.StartProcess("lib/powerpc-eabi-as.exe",
+                                                    "-mgekko",
+                                                    "-mregnames",
+                                                    "-al",
+                                                    "--listing-rhs-width=900",
+                                                    $"\"{tmpSrc}\"",
+                                                    $"-o \"{tmpBin}\"");
 
-            // call objcopy
-            var tmpOut = Path.GetTempFileName();
-            err.Append(Util.StartProcess("lib/powerpc-eabi-objcopy.exe", $"-O binary {tmpBin}  {tmpOut}"));
+            // copy instruction bytes to raw bin file
+            ProcResult cpResult = Util.StartProcess("lib/powerpc-eabi-objcopy.exe",
+                                                         $"-O binary",
+                                                         $"{tmpBin}",
+                                                         $"{tmpOut}");
 
-            // if no errors, get file bytes
-            string error = err.ToString();
-            if (string.IsNullOrWhiteSpace(error))
+
+            if (asResult.ExitCode == 0 && cpResult.ExitCode == 0)
             {
                 sectionData = File.ReadAllBytes(tmpOut);
+                return asResult.StandardOutput;
             }
             else
             {
-                Console.WriteLine(err.ToString());
-                return "";
+                Console.Write(asResult.StandardError);
+                Console.Write(cpResult.StandardError);
             }
-
-            return listing;
+            return null;
         }
         /// <summary>
         /// Gathers labels and Relocation tags 
@@ -211,14 +204,19 @@ namespace reltools
         /// </summary>
         /// <param name="listing">GAS Listing</param>
         /// <param name="sectionID">SectionID</param>
-        public void ProcessListing(string listing, int sectionID)
+        private void ProcessListing(string listing, int sectionID)
         {
-            var lines = listing.Split('\n').Where(x => !string.IsNullOrWhiteSpace(x));
-
+            // GAS listing does not provide offsets for labels
+            // so we iterate in reverse order and keep track
+            // of the last known offset and assign to labels.
+            var lines = listing.Split('\n').Select(x => x.Trim()).Reverse();
             int curOffset = 0;
-            foreach (var line in lines.Select(x => x.Trim()).Reverse())
+            foreach (var line in lines)
             {
                 if (line.StartsWith("GAS"))
+                    continue;
+
+                if (string.IsNullOrWhiteSpace(line))
                     continue;
 
                 // GAS leaves the .include line in 
@@ -231,6 +229,11 @@ namespace reltools
                                     .Select(x => x.Trim())
                                     .Where(x => !string.IsNullOrWhiteSpace(x))
                                     .ToArray();
+
+                // blank lines in source code will 
+                // only have a line number.
+                if (lineParts.Length != 2)
+                    continue;
 
                 string lineInfo = lineParts[0];
                 string asmLine = lineParts[1];
@@ -253,14 +256,23 @@ namespace reltools
                 // remove comments (this includes reltags)
                 // so we can assume a line ending in ":" as a label.
                 // Also handle reltags here
-                if (asmLine.Contains("#"))
+                if (asmLine.Contains("#!RT!["))
                 {
-                    if (asmLine.Contains("#["))
+                    try
                     {
                         var tag = asmLine.Substring(asmLine.IndexOf('['), asmLine.IndexOf("]") - asmLine.IndexOf('[') + 1);
                         var t = (sdefLine, RelTag.FromString(tag));
                         Tags.Add(t);
                     }
+                    catch
+                    {
+                        throw new Exception($"Failed to parse RelTag\n{line}");
+                    }
+                }
+
+                // remove comments if normal comment
+                if (asmLine.Contains("#"))
+                {
                     asmLine = asmLine.Substring(0, asmLine.IndexOf("#")).Trim();
                 }
 
@@ -293,22 +305,28 @@ namespace reltools
         }
         private void AddCommandToSection(RelTag tag, SDefLine line, ModuleSectionNode section)
         {
-            string mangled = SymbolUtils.MangleSymbol((int)tag.TargetModule, tag.TargetSection, tag.Label);
             uint targetOffset;
+            string mangled = SymbolUtils.MangleSymbol((int)tag.TargetModule, tag.TargetSection, tag.Label);
             Symbol sym = SymbolMap.GetSymbol(tag.TargetModule, tag.TargetSection, tag.Label);
-            if (sym != null)
-            {
-                targetOffset = sym.Offset;
-            }
-            else if (LocalLabels.ContainsKey(mangled))
+
+            // give local labels priority over symbol map
+            if (LocalLabels.ContainsKey(mangled))
             {
                 // NOTE: specially handled symbols (entry, exit, unresolved)
                 // CANNOT be referenced via reltag.
                 targetOffset = LocalLabels[mangled].offset;
             }
-            else
+            else if (sym != null)
+            {
+                targetOffset = sym.Offset;
+            }
+            else if (tag.Label.StartsWith("loc_"))
             {
                 targetOffset = Convert.ToUInt32(tag.Label.Substring(4), 16);
+            }
+            else
+            {
+                throw new Exception($"Couldn't resolve symbol for RelTag target: {tag.Label}");
             }
 
             RELLink link = new RELLink()

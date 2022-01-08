@@ -1,6 +1,12 @@
-using BrawlLib.SSBB.ResourceNodes;using System;using System.Text.RegularExpressions;namespace reltools{
+using BrawlLib.SSBB.ResourceNodes;
+using System;
+using System.Text.RegularExpressions;
+
+namespace reltools
+{
     internal class RelTag
     {
+        public static readonly Regex TagRegex = new Regex("\\[(.*)\\((.+),(.+),\\s*\"*(\\w+)\"*\\s*\\)\\]", RegexOptions.Compiled);
         public RelTag(PPCRelType command, uint targetModule, int targetSection, string label)
         {
             this.Command = command;
@@ -66,13 +72,18 @@ using BrawlLib.SSBB.ResourceNodes;using System;using System.Text.RegularExpres
 
         public static RelTag FromString(string input)
         {
-            var matches = Regex.Matches(input, "[\\w+\\.]+");
-            var command = (PPCRelType)Enum.Parse(typeof(PPCRelType), matches[0].Value);
-            uint targetModule = Convert.ToUInt32(matches[1].Value);
-            int targetSection = Convert.ToInt32(matches[2].Value);
-            string value = matches[3].Value;
+            var m = TagRegex.Match(input);
+            if (m.Success)
+            {
+                var command = (PPCRelType)Enum.Parse(typeof(PPCRelType), m.Groups[1].Value);
+                uint targetModule = Convert.ToUInt32(m.Groups[2].Value);
+                int targetSection = Convert.ToInt32(m.Groups[3].Value);
+                string value = m.Groups[4].Value;
 
-            return new RelTag(command, targetModule, targetSection, value);
+                return new RelTag(command, targetModule, targetSection, value);
+            }
+
+            return null;
         }
 
         public override string ToString()
@@ -125,4 +136,5 @@ using BrawlLib.SSBB.ResourceNodes;using System;using System.Text.RegularExpres
         R_DOLPHIN_SECTION = 202,
         R_DOLPHIN_END = 203,
         R_DOLPHIN_MRKREF = 204
-    }}
+    }
+}

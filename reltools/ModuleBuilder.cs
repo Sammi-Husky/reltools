@@ -157,6 +157,9 @@ namespace reltools
         {
             sectionData = null;
 
+            // remove all comments
+            asm = Regex.Replace(asm, @"#.*", "", RegexOptions.Compiled);
+
             // comment out reltags since GAS
             // will error encountering them
             asm = RelTag.TagRegex.Replace(asm, @"#!RT!$0");

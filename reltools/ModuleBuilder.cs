@@ -184,9 +184,9 @@ namespace reltools
 
             // copy instruction bytes to raw bin file
             ProcResult cpResult = Util.StartProcess("lib/powerpc-eabi-objcopy.exe",
-                                                         $"-O binary",
-                                                         $"{tmpBin}",
-                                                         $"{tmpOut}");
+                                                    $"-O binary",
+                                                    $"{tmpBin}",
+                                                    $"{tmpOut}");
 
 
             if (asResult.ExitCode == 0 && cpResult.ExitCode == 0)
@@ -282,7 +282,12 @@ namespace reltools
                 // if line is a label, add it to the local label map
                 if (asmLine.EndsWith(":"))
                 {
-                    AddLabel(asmLine.Trim(':'), sdefLine);
+                    // don't save local labels (all numbers)
+                    string trimmed = asmLine.Trim(':');
+                    if (!int.TryParse(trimmed, out _))
+                    {
+                        AddLabel(trimmed, sdefLine);
+                    }
                 }
             }
         }

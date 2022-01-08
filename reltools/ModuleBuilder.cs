@@ -152,7 +152,7 @@ namespace reltools
         /// </summary>
         /// <param name="asm">GNU Assembly source code</param>
         /// <param name="sectionData">compiled machine code bytes</param>
-        /// <returns>GAS Listing split by newline</returns>
+        /// <returns>GAS Listing</returns>
         private string Compile(string asm, out byte[] sectionData)
         {
             sectionData = null;

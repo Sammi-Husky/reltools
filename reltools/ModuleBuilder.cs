@@ -151,8 +151,8 @@ namespace reltools
         /// a listing file for further processing.
         /// </summary>
         /// <param name="asm">GNU Assembly source code</param>
-        /// <param name="sectionData">compiled machine code bytes</param>
-        /// <returns>GAS Listing</returns>
+        /// <param name="listing">compiled machine code bytes</param>
+        /// <returns>Compiled machine code</returns>
         private static byte[] Compile(string asm, out string listing)
         {
             listing = "";

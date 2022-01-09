@@ -99,7 +99,7 @@ namespace reltools
 
                     // compiles asm source and returns
                     // GAS Listing + section bytes
-                    string listing = Compile(asm, out byte[] sectionData);
+                    byte[] sectionData = Compile(asm, out string listing);
 
                     // processes the listing file to gather
                     // labels and reltags for this section
@@ -153,9 +153,9 @@ namespace reltools
         /// <param name="asm">GNU Assembly source code</param>
         /// <param name="sectionData">compiled machine code bytes</param>
         /// <returns>GAS Listing</returns>
-        private string Compile(string asm, out byte[] sectionData)
+        private static byte[] Compile(string asm, out string listing)
         {
-            sectionData = null;
+            listing = "";
 
             // remove all comments
             asm = Regex.Replace(asm, @"#.*", "", RegexOptions.Compiled);
@@ -191,8 +191,8 @@ namespace reltools
 
             if (asResult.ExitCode == 0 && cpResult.ExitCode == 0)
             {
-                sectionData = File.ReadAllBytes(tmpOut);
-                return asResult.StandardOutput;
+                listing = asResult.StandardOutput;
+                return File.ReadAllBytes(tmpOut);
             }
             else
             {

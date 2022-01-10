@@ -22,15 +22,16 @@ namespace reltools
     }
     internal class ModuleBuilder
     {
-        public ModuleBuilder(string jsonFilepath, SymbolMap symbolMap = null)
+        public ModuleBuilder(string jsonFilepath, SymbolMap symbolMap = null, string[] defines = null)
         {
             string json = File.ReadAllText(jsonFilepath);
-            Info = (RelInfo)JsonConvert.DeserializeObject(json, typeof(RelInfo));
 
-            SymbolMap = symbolMap ?? new SymbolMap();
-            RootPath = Path.GetDirectoryName(jsonFilepath);
-            LocalLabels = new Dictionary<string, SDefLine>();
-            Tags = new List<(SDefLine, RelTag)>();
+            this.Info = (RelInfo)JsonConvert.DeserializeObject(json, typeof(RelInfo));
+            this.SymbolMap = symbolMap ?? new SymbolMap();
+            this.Defines = defines ?? Array.Empty<string>();
+            this.RootPath = Path.GetDirectoryName(jsonFilepath);
+            this.LocalLabels = new Dictionary<string, SDefLine>();
+            this.Tags = new List<(SDefLine, RelTag)>();
         }
 
         /// <summary>
@@ -43,6 +44,10 @@ namespace reltools
         /// </summary>
         private Dictionary<string, SDefLine> LocalLabels { get; set; }
         /// <summary>
+        /// Symbol defines to pass to the assembler
+        /// </summary>
+        private string[] Defines { get; set; }
+        /// <summary>
         /// Relocation tags and the lines they belong to
         /// </summary>
         private List<(SDefLine, RelTag)> Tags { get; set; }
@@ -54,9 +59,9 @@ namespace reltools
         /// Root directory of rel project to build
         /// </summary>
         public string RootPath { get; set; }
-        public static void BuildRel(string jsonFilepath, string outputFolder, SymbolMap map = null)
+        public static void BuildRel(string jsonFilepath, string outputFolder, SymbolMap map = null, string[] defines = null)
         {
-            var builder = new ModuleBuilder(jsonFilepath, map);
+            var builder = new ModuleBuilder(jsonFilepath, map, defines);
             builder.BuildRel(outputFolder);
         }
         public void BuildRel(string outputFolder)
@@ -99,7 +104,7 @@ namespace reltools
 
                     // compiles asm source and returns
                     // GAS Listing + section bytes
-                    byte[] sectionData = Compile(asm, out string listing);
+                    byte[] sectionData = Compile(asm, this.Defines, out string listing);
 
                     // processes the listing file to gather
                     // labels and reltags for this section
@@ -153,7 +158,7 @@ namespace reltools
         /// <param name="asm">GNU Assembly source code</param>
         /// <param name="listing">compiled machine code bytes</param>
         /// <returns>Compiled machine code</returns>
-        private static byte[] Compile(string asm, out string listing)
+        private static byte[] Compile(string asm, string[] defines, out string listing)
         {
             listing = "";
 
@@ -173,12 +178,15 @@ namespace reltools
             var tmpOut = Path.GetTempFileName();
             File.WriteAllText(tmpSrc, asm);
 
+            string _defs = string.Join("", defines.Select(x => $"--defsym {x}=1"));
+
             // assemble source code + generate listing
             ProcResult asResult = Util.StartProcess("lib/powerpc-eabi-as.exe",
                                                     "-mgekko",
                                                     "-mregnames",
                                                     "-alc",
                                                     "--listing-rhs-width=900",
+                                                    $"{_defs}",
                                                     $"\"{tmpSrc}\"",
                                                     $"-o \"{tmpBin}\"");
 
@@ -200,6 +208,10 @@ namespace reltools
                 Console.Write(cpResult.StandardError);
             }
             return null;
+        }
+        private static byte[] Compile(string asm, out string listing)
+        {
+            return Compile(asm, Array.Empty<string>(), out listing);
         }
         /// <summary>
         /// Gathers labels and Relocation tags 

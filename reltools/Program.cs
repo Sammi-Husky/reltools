@@ -18,6 +18,7 @@ namespace reltools
     {
         private static readonly List<string> targets = new List<string>();
         private static readonly List<string> mapfiles = new List<string>();
+        private static readonly List<string> defsyms = new List<string>();
 
         private static string output = null;
         private static APP_MODE mode = APP_MODE.DUMP;
@@ -85,7 +86,7 @@ namespace reltools
 
             foreach (var target in targets)
             {
-                ModuleBuilder.BuildRel(target, outputFolder, map);
+                ModuleBuilder.BuildRel(target, outputFolder, map, defsyms.ToArray());
             }
         }
         private static void GenMapsForTargets(string outputFolder)
@@ -225,6 +226,17 @@ namespace reltools
                     case "--genmap":
                         mode = APP_MODE.GENMAP;
                         break;
+                    case "-d":
+                    case "--def":
+                        if (i + 1 >= args.Length)
+                        {
+                            shouldExit = true;
+                        }
+                        else
+                        {
+                            defsyms.Add(args[++i]);
+                        }
+                        break;
                     default:
                         targets.Add(args[i]);
                         break;
@@ -251,6 +263,9 @@ namespace reltools
             Console.WriteLine("      Generates a map file from the target(s)");
             Console.WriteLine("  -o, --output [path]:");
             Console.WriteLine("      Sets output directory");
+            Console.WriteLine("  -D, --def [symbol]:");
+            Console.WriteLine("      Defines 'symbol' and passes it to the assembler when rebuilding. " +
+                              "      Example: \"-D Release\" will define symbol \"Release\". Used in conditional statements(.ifdef/.endif)");
             Console.WriteLine("\nUsage: reltools.exe [options] [targets]");
         }
         private static string[] GatherFiles(string directory, string pattern, bool recursive)

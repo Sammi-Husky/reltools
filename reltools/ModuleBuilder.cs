@@ -176,6 +176,7 @@ namespace reltools
             var tmpSrc = Path.GetTempFileName();
             var tmpBin = Path.GetTempFileName();
             var tmpOut = Path.GetTempFileName();
+            var tmpLst = Path.GetTempFileName();
             File.WriteAllText(tmpSrc, asm);
 
             string _defs = string.Join("", defines.Select(x => $"--defsym {x}=1"));
@@ -184,7 +185,7 @@ namespace reltools
             ProcResult asResult = Util.StartProcess("lib/powerpc-eabi-as.exe",
                                                     "-mgekko",
                                                     "-mregnames",
-                                                    "-alc",
+                                                    $"-alc={tmpLst}",
                                                     "--listing-rhs-width=900",
                                                     $"{_defs}",
                                                     $"\"{tmpSrc}\"",
@@ -199,7 +200,8 @@ namespace reltools
 
             if (asResult.ExitCode == 0 && cpResult.ExitCode == 0)
             {
-                listing = asResult.StandardOutput;
+                listing = File.ReadAllText(tmpLst);
+                Console.WriteLine($"    [Assembler] {asResult.StandardOutput}");
                 return File.ReadAllBytes(tmpOut);
             }
             else

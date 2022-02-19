@@ -18,6 +18,7 @@ namespace reltools
         public ModuleDumper(RELNode node, SymbolMap map = null)
         {
             _node = node;
+            LogOutput = new StringBuilder();
             _labelMap = map ?? new SymbolMap();
             _labelMap.AddSymbol(node.ModuleID, (int)node.PrologSection, new Symbol(node._prologOffset, "__entry"), true);
             _labelMap.AddSymbol(node.ModuleID, (int)node.EpilogSection, new Symbol(node._epilogOffset, "__exit"), true);
@@ -46,13 +47,15 @@ namespace reltools
         }
         private RELNode _node;
 
+        private StringBuilder LogOutput { get; set; }
+
         #region static methods
-        public static RelCommand[] DumpRel(RELNode node, string outputFolder)
+        public static string DumpRel(RELNode node, string outputFolder)
         {
             ModuleDumper dumper = new ModuleDumper(node);
             return dumper.DumpRel(outputFolder);
         }
-        public static RelCommand[] DumpRel(RELNode node, string outpuFolder, SymbolMap labelMap)
+        public static string DumpRel(RELNode node, string outpuFolder, SymbolMap labelMap)
         {
             ModuleDumper dumper = new ModuleDumper(node, labelMap);
             return dumper.DumpRel(outpuFolder);
@@ -120,10 +123,8 @@ namespace reltools
         #endregion
 
         #region instance methods
-        public RelCommand[] DumpRel(string outputFolder)
+        public string DumpRel(string outputFolder)
         {
-            List<RelCommand> commands = new List<RelCommand>();
-
             // create our output directory if it doesn't exist.
             Directory.CreateDirectory(outputFolder);
 
@@ -141,7 +142,7 @@ namespace reltools
                 Sections = new List<RelSection>(Node.Sections.Length)
             };
 
-            Console.WriteLine($"Unpacking: {Node.FilePath}:");
+            LogOutput.AppendLine($"Unpacking: {Node.FilePath}:");
             for (int i = 0; i < Node.Sections.Length; i++)
             {
                 var section = Node.Sections[i];
@@ -173,7 +174,7 @@ namespace reltools
                 };
                 relinfo.Sections.Add(sectionInfo);
 
-                Console.WriteLine($"    {sectionFP}");
+                LogOutput.AppendLine($"    {sectionFP}");
 
                 // dump sections to file
                 if (section.HasCode)
@@ -184,14 +185,13 @@ namespace reltools
                 {
                     DumpSection(section, sectionFP);
                 }
-                commands.AddRange(section._manager.GetCommands().Select(x => x.Value));
             }
 
             using (var writer = File.CreateText(Path.Combine(outputFolder, $"{relname}.json")))
             {
                 writer.Write(JsonConvert.SerializeObject(relinfo, Formatting.Indented));
             }
-            return commands.ToArray();
+            return LogOutput.ToString();
         }
         private unsafe void DumpSection(ModuleSectionNode node, string filepath)
         {

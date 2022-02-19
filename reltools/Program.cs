@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace reltools
 {
@@ -62,15 +64,16 @@ namespace reltools
                 targets.AddRange(GatherFiles(folder, "*.rel", true));
             }
 
-            foreach (var target in targets)
+            Parallel.ForEach(targets, target =>
             {
                 RELNode node = (RELNode)NodeFactory.FromFile(null, target);
-                ModuleDumper.DumpRel(node, Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)), map);
+                string log = ModuleDumper.DumpRel(node, Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)), map);
+                Console.WriteLine(log);
 
                 // race condition where linked branches will be
                 // null or 0 if we don't do this?????
                 node.Dispose();
-            }
+            });
         }
         private static void BuildTargets(string outputFolder)
         {
@@ -84,10 +87,12 @@ namespace reltools
                 targets.AddRange(GatherFiles(folder, "*.json", true));
             }
 
-            foreach (var target in targets)
+            // run builds in parallel for speed
+            Parallel.ForEach(targets, target =>
             {
-                ModuleBuilder.BuildRel(target, outputFolder, map, defsyms.ToArray());
-            }
+                string log = ModuleBuilder.BuildRel(target, outputFolder, map, defsyms);
+                Console.Write(log);
+            });
         }
         private static void GenMapsForTargets(string outputFolder)
         {
@@ -101,7 +106,7 @@ namespace reltools
                 targets.AddRange(GatherFiles(folder, "*.rel", true));
             }
 
-            foreach (var target in targets)
+            Parallel.ForEach(targets, target =>
             {
                 string mapFile = $"{Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target))}.map";
 
@@ -116,7 +121,7 @@ namespace reltools
                     // null or 0 if we don't do this?????
                     node.Dispose();
                 }
-            }
+            });
         }
         /// <summary>
         /// Parses program arguments

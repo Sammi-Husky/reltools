@@ -22,7 +22,7 @@ namespace reltools
     }
     internal class ModuleBuilder
     {
-        public ModuleBuilder(string jsonFilepath, SymbolMap symbolMap = null, string[] defines = null)
+        public ModuleBuilder(string jsonFilepath, SymbolMap symbolMap = null, IEnumerable<string> defines = null)
         {
             string json = File.ReadAllText(jsonFilepath);
 
@@ -32,7 +32,10 @@ namespace reltools
             this.RootPath = Path.GetDirectoryName(jsonFilepath);
             this.LocalLabels = new Dictionary<string, SDefLine>();
             this.Tags = new List<(SDefLine, RelTag)>();
+            this.LogOutput = new StringBuilder();
         }
+
+        private StringBuilder LogOutput { get; set; }
 
         /// <summary>
         /// Symbol map used for external symbol resolution and
@@ -46,7 +49,7 @@ namespace reltools
         /// <summary>
         /// Symbol defines to pass to the assembler
         /// </summary>
-        private string[] Defines { get; set; }
+        private IEnumerable<string> Defines { get; set; }
         /// <summary>
         /// Relocation tags and the lines they belong to
         /// </summary>
@@ -59,14 +62,14 @@ namespace reltools
         /// Root directory of rel project to build
         /// </summary>
         public string RootPath { get; set; }
-        public static void BuildRel(string jsonFilepath, string outputFolder, SymbolMap map = null, string[] defines = null)
+        public static string BuildRel(string jsonFilepath, string outputFolder, SymbolMap map = null, IEnumerable<string> defines = null)
         {
             var builder = new ModuleBuilder(jsonFilepath, map, defines);
-            builder.BuildRel(outputFolder);
+            return builder.BuildRel(outputFolder);
         }
-        public void BuildRel(string outputFolder)
+        public string BuildRel(string outputFolder)
         {
-            Console.WriteLine($"Building: {Info.Name}");
+            LogOutput.AppendLine($"Building: {Info.Name}");
             RELNode n = new RELNode
             {
                 Name = Info.Name,
@@ -80,7 +83,7 @@ namespace reltools
             };
 
             // parse sections
-            Console.WriteLine("    Parsing section definitions");
+            LogOutput.AppendLine("    Parsing section definitions");
             for (int i = 0; i < Info.Sections.Count; i++)
             {
                 // even empty sections need a manager or brawllib will throw a fit
@@ -92,7 +95,7 @@ namespace reltools
                 var sectionInfo = Info.Sections[i];
                 if (sectionInfo != null)
                 {
-                    Console.WriteLine($"    Building: {sectionInfo.Path}");
+                    LogOutput.AppendLine($"    Building: {sectionInfo.Path}");
 
                     s.ExpandSection = sectionInfo.Expand;
                     s._endBufferSize = sectionInfo.ExpandSize;
@@ -117,7 +120,7 @@ namespace reltools
                     }
                     else
                     {
-                        Console.WriteLine("    Error building section!");
+                        LogOutput.AppendLine("    Error building section!");
                     }
                 }
                 n._sections[i] = s;
@@ -150,6 +153,7 @@ namespace reltools
             // call dispose explicitely here to prevent
             // a strange race condition in brawllib
             //n.Dispose();
+            return LogOutput.ToString();
         }
         /// <summary>
         /// Compiles GNU assembly code input and generates 
@@ -158,7 +162,7 @@ namespace reltools
         /// <param name="asm">GNU Assembly source code</param>
         /// <param name="listing">compiled machine code bytes</param>
         /// <returns>Compiled machine code</returns>
-        private static byte[] Compile(string asm, string[] defines, out string listing)
+        private byte[] Compile(string asm, IEnumerable<string> defines, out string listing)
         {
             listing = "";
 
@@ -201,17 +205,20 @@ namespace reltools
             if (asResult.ExitCode == 0 && cpResult.ExitCode == 0)
             {
                 listing = File.ReadAllText(tmpLst);
-                Console.WriteLine($"    [Assembler] {asResult.StandardOutput}");
+                if (!string.IsNullOrWhiteSpace(asResult.StandardOutput))
+                {
+                    LogOutput.AppendLine($"    [Assembler] {asResult.StandardOutput}");
+                }
                 return File.ReadAllBytes(tmpOut);
             }
             else
             {
-                Console.Write(asResult.StandardError);
-                Console.Write(cpResult.StandardError);
+                LogOutput.Append(asResult.StandardError);
+                LogOutput.Append(cpResult.StandardError);
             }
             return null;
         }
-        private static byte[] Compile(string asm, out string listing)
+        private byte[] Compile(string asm, out string listing)
         {
             return Compile(asm, Array.Empty<string>(), out listing);
         }

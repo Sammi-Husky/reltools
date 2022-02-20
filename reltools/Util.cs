@@ -18,6 +18,19 @@ namespace reltools
     }
     public static class Util
     {
+        public static bool IsAscii(byte data)
+        {
+            return data >= 0x20 && data <= 0x7e;
+        }
+        public static bool IsString(byte[] data)
+        {
+            for(int i=0; i<data.Length; i++)
+            {
+                if(!IsAscii(data[i]))
+                    return false;
+            }
+            return true;
+        }
         public static ProcResult StartProcess(string application, params string[] args)
         {
             var proc = new Process

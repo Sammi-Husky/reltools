@@ -211,6 +211,7 @@ namespace reltools
                     var command = node._manager.GetCommand(i);
                     var linked = node._manager.GetLinked(i);
                     Symbol sym = LabelMap.GetSymbol(node.ModuleID, node.Index, (uint)i * 4);
+                    bool needsAlign = false;
 
                     // if this location is referenced write the label for it
                     if (sym != null)
@@ -223,6 +224,34 @@ namespace reltools
                     }
 
                     string dataStr = $"    .4byte 0x{data:X8}";
+
+                    // is data at addr a string?
+                    byte tmp = *(byte*)(addr + i * 4);
+                    if (Util.IsAscii(tmp))
+                    {
+                        int x = 1;
+                        List<char> chars = new List<char>();
+                        while (tmp != 0 && Util.IsAscii(tmp))
+                        {
+                            chars.Add((char)tmp);
+                            tmp = *(byte*)(addr + x + (i * 4));
+                            x++;
+                        }
+
+                        // threshold
+                        if (chars.Count >= 4)
+                        {
+                            dataStr = $"    .asciz \"{new string(chars.ToArray())}\"";
+                            if (x % 4 > 0)
+                            {
+                                x = x.RoundUp(4);
+                                needsAlign = true;
+                            }
+                            i += (x / 4) - 1; // subtract one as for loop will advance the index itself
+                        }
+                    }
+
+
                     // write relocation tag to end of line
                     if (command != null)
                     {
@@ -234,6 +263,12 @@ namespace reltools
                     {
                         sb.AppendLine($"    {dataStr}");
                     }
+
+                    if (needsAlign)
+                    {
+                        sb.AppendLine("        .balign 4");
+                    }
+
                 }
                 writer.Write(sb.ToString());
             }

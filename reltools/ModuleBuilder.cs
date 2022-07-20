@@ -215,8 +215,9 @@ namespace reltools
             {
                 LogOutput.Append(asResult.StandardError);
                 LogOutput.Append(cpResult.StandardError);
+                Console.WriteLine(LogOutput.ToString());
+                throw new Exception($"Failed to assemble source file");
             }
-            return null;
         }
         private byte[] Compile(string asm, out string listing)
         {
@@ -276,6 +277,9 @@ namespace reltools
                     data = asmLine,
                     section = sectionID
                 };
+
+                if (asmLine.StartsWith("#"))
+                    continue;
 
                 // remove comments (this includes reltags)
                 // so we can assume a line ending in ":" as a label.

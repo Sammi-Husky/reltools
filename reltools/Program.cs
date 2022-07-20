@@ -63,12 +63,13 @@ namespace reltools
                 targets.Clear();
                 targets.AddRange(GatherFiles(folder, "*.rel", true));
             }
-
             Parallel.ForEach(targets, target =>
             {
+                Console.WriteLine(target);
                 RELNode node = (RELNode)NodeFactory.FromFile(null, target);
-                string log = ModuleDumper.DumpRel(node, Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)), map);
-                Console.WriteLine(log);
+                ModuleDumper d = new ModuleDumper(node, map);
+                string log = d.DumpRel(Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)));
+                //string log = ModuleDumper.DumpRel(node, Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)), map);
 
                 // race condition where linked branches will be
                 // null or 0 if we don't do this?????

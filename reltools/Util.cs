@@ -1,6 +1,8 @@
 ﻿using BrawlLib.Internal;
+using System;
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace reltools
 {
@@ -30,6 +32,16 @@ namespace reltools
                     return false;
             }
             return true;
+        }
+        public static string HexNumbersToDecimal(string input)
+        {
+            MatchCollection matches = Regex.Matches(input, @"(0x[\dA-Fa-f]+)");
+            //string output = input;
+            foreach(Match m in matches)
+            {
+                input = Regex.Replace(input, m.Value, Convert.ToUInt32(m.Value, 16).ToString());
+            }
+            return input;
         }
         public static ProcResult StartProcess(string application, params string[] args)
         {

@@ -11,6 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using NCalc;
 
 namespace reltools
 {
@@ -22,16 +23,17 @@ namespace reltools
     }
     internal class ModuleBuilder
     {
-        public ModuleBuilder(string jsonFilepath, SymbolMap symbolMap = null, IEnumerable<string> defines = null)
+        public ModuleBuilder(string jsonFilepath, IEnumerable<string> defines = null)
         {
             string json = File.ReadAllText(jsonFilepath);
 
             this.Info = (RelInfo)JsonConvert.DeserializeObject(json, typeof(RelInfo));
-            this.SymbolMap = symbolMap ?? new SymbolMap();
+            this.SymbolMap = SymbolManager.Map;
             this.Defines = defines ?? Array.Empty<string>();
             this.RootPath = Path.GetDirectoryName(jsonFilepath);
             this.LocalLabels = new Dictionary<string, SDefLine>();
             this.Tags = new List<(SDefLine, RelTag)>();
+            this.RawTags = new Dictionary<int, string>();
             this.LogOutput = new StringBuilder();
         }
 
@@ -55,6 +57,10 @@ namespace reltools
         /// </summary>
         private List<(SDefLine, RelTag)> Tags { get; set; }
         /// <summary>
+        /// Map of line numbers to raw relocation tags
+        /// </summary>
+        private Dictionary<int, string> RawTags { get; set; }
+        /// <summary>
         /// Information about the rel file to build
         /// </summary>
         public RelInfo Info { get; set; }
@@ -62,9 +68,9 @@ namespace reltools
         /// Root directory of rel project to build
         /// </summary>
         public string RootPath { get; set; }
-        public static string BuildRel(string jsonFilepath, string outputFolder, SymbolMap map = null, IEnumerable<string> defines = null)
+        public static string BuildRel(string jsonFilepath, string outputFolder, IEnumerable<string> defines = null)
         {
-            var builder = new ModuleBuilder(jsonFilepath, map, defines);
+            var builder = new ModuleBuilder(jsonFilepath, defines);
             return builder.BuildRel(outputFolder);
         }
         public string BuildRel(string outputFolder)
@@ -84,15 +90,18 @@ namespace reltools
 
             // parse sections
             LogOutput.AppendLine("    Parsing section definitions");
-            for (int i = 0; i < Info.Sections.Count; i++)
+            for (int sectionID = 0; sectionID < Info.Sections.Count; sectionID++)
             {
+                RawTags.Clear();
+                Tags.Clear();
+
                 // even empty sections need a manager or brawllib will throw a fit
                 ModuleSectionNode s = new ModuleSectionNode(0)
                 {
                     _manager = new RelocationManager(null)
                 };
 
-                var sectionInfo = Info.Sections[i];
+                var sectionInfo = Info.Sections[sectionID];
                 if (sectionInfo != null)
                 {
                     LogOutput.AppendLine($"    Building: {sectionInfo.Path}");
@@ -105,13 +114,18 @@ namespace reltools
                     string sectionPath = Path.Combine(RootPath, sectionInfo.Path);
                     string asm = GetSource(sectionPath);
 
+                    // Transforms source so reltags are
+                    // references into a dictionary. This
+                    // gets around GAS listing line limit
+                    asm = HandleReltags(asm);
+
                     // compiles asm source and returns
                     // GAS Listing + section bytes
                     byte[] sectionData = Compile(asm, this.Defines, out string listing);
 
                     // processes the listing file to gather
                     // labels and reltags for this section
-                    ProcessListing(listing, i);
+                    ProcessListing(listing, sectionID);
 
                     // if compilation succeeded, write section data to rel
                     if (sectionData != null)
@@ -123,14 +137,15 @@ namespace reltools
                         LogOutput.AppendLine("    Error building section!");
                     }
                 }
-                n._sections[i] = s;
-                n.AddChild(s);
-            }
 
-            // link all relocations
-            foreach ((SDefLine line, RelTag tag) in Tags)
-            {
-                AddCommandToSection(tag, line, n.Sections[line.section]);
+                // link all relocations
+                foreach ((SDefLine line, RelTag tag) in Tags)
+                {
+                    AddCommandToSection(tag, line, s);
+                }
+
+                n._sections[sectionID] = s;
+                n.AddChild(s);
             }
 
             n._prologOffset = LocalLabels["__entry"].offset;
@@ -155,6 +170,27 @@ namespace reltools
             //n.Dispose();
             return LogOutput.ToString();
         }
+
+        private string HandleReltags(string asm)
+        {
+            var lines = asm.Split('\n').Select(x => x.Trim()).ToArray();
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                if (!line.Contains("[") && !line.Contains("]"))
+                    continue;
+
+                Match m = RelTag.TagRegex.Match(line);
+                if (m.Success)
+                {
+                    RawTags.Add(i, m.Value);
+                    lines[i] = RelTag.TagRegex.Replace(line, $"#!RT![{i}]");
+                }
+
+            }
+            return string.Join("\n", lines);
+        }
+
         /// <summary>
         /// Compiles GNU assembly code input and generates 
         /// a listing file for further processing.
@@ -167,11 +203,7 @@ namespace reltools
             listing = "";
 
             // remove all comments
-            asm = Regex.Replace(asm, @"#.*", "", RegexOptions.Compiled);
-
-            // comment out reltags since GAS
-            // will error encountering them
-            asm = RelTag.TagRegex.Replace(asm, @"#!RT!$0");
+            asm = Regex.Replace(asm, @"#(?!\!RT\!).*", "", RegexOptions.Compiled);
 
             // convert tabs to spaces
             asm = asm.Replace("\t", "    ");
@@ -288,9 +320,16 @@ namespace reltools
                 {
                     try
                     {
-                        var tag = asmLine.Substring(asmLine.IndexOf('['), asmLine.IndexOf("]") - asmLine.IndexOf('[') + 1);
-                        var t = (sdefLine, RelTag.FromString(tag));
-                        Tags.Add(t);
+                        Match m = Regex.Match(asmLine, @"#!RT!\[(\d+)\]");
+                        if (m.Success)
+                        {
+                            int index = Convert.ToInt32(m.Groups[1].Value);
+                            string raw = RawTags[index];
+                            //var tag = raw.Substring(raw.IndexOf('['), raw.IndexOf("]") - raw.IndexOf('[') + 1);
+                            var t = (sdefLine, RelTag.FromString(raw));
+                            Tags.Add(t);
+                        }
+
                     }
                     catch
                     {
@@ -318,7 +357,7 @@ namespace reltools
         }
         private void AddLabel(string label, SDefLine line)
         {
-            string mangled = SymbolUtils.MangleSymbol(Info.ModuleID, line.section, label);
+            string mangled = SymbolManager.MangleSymbol(Info.ModuleID, line.section, label);
             if (LocalLabels.ContainsKey(label) || LocalLabels.ContainsKey(mangled))
             {
                 return;
@@ -339,7 +378,7 @@ namespace reltools
         private void AddCommandToSection(RelTag tag, SDefLine line, ModuleSectionNode section)
         {
             uint targetOffset;
-            string mangled = SymbolUtils.MangleSymbol((int)tag.TargetModule, tag.TargetSection, tag.Label);
+            string mangled = SymbolManager.MangleSymbol((int)tag.TargetModule, tag.TargetSection, tag.Label);
             Symbol sym = SymbolMap.GetSymbol(tag.TargetModule, tag.TargetSection, tag.Label);
 
             // give local labels priority over symbol map
@@ -360,6 +399,20 @@ namespace reltools
             else
             {
                 throw new Exception($"Couldn't resolve symbol for RelTag target: {tag.Label}");
+            }
+
+            if (!string.IsNullOrEmpty(tag.Expression))
+            {
+                try
+                {
+                    var str = targetOffset.ToString() + Util.HexNumbersToDecimal(tag.Expression);
+                    Expression expr = new Expression(str);
+                    targetOffset = Convert.ToUInt32(expr.Evaluate());
+                }
+                catch
+                {
+                    throw new Exception($"Could not evaluate expression for reltag symbol\n{tag}");
+                }
             }
 
             RELLink link = new RELLink()

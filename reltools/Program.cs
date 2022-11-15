@@ -24,7 +24,6 @@ namespace reltools
 
         private static string output = null;
         private static APP_MODE mode = APP_MODE.DUMP;
-        private static SymbolMap map;
 
         public static void Main(string[] args)
         {
@@ -36,7 +35,7 @@ namespace reltools
 
             if (mapfiles.Count > 0)
             {
-                map = SymbolMap.FromFiles(mapfiles.ToArray());
+                SymbolManager.Map = SymbolMap.FromFiles(mapfiles.ToArray());
             }
 
             if (mode == APP_MODE.DUMP)
@@ -67,7 +66,7 @@ namespace reltools
             {
                 Console.WriteLine(target);
                 RELNode node = (RELNode)NodeFactory.FromFile(null, target);
-                ModuleDumper d = new ModuleDumper(node, map);
+                ModuleDumper d = new ModuleDumper(node);
                 string log = d.DumpRel(Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)));
                 //string log = ModuleDumper.DumpRel(node, Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)), map);
 
@@ -91,8 +90,15 @@ namespace reltools
             // run builds in parallel for speed
             Parallel.ForEach(targets, target =>
             {
-                string log = ModuleBuilder.BuildRel(target, outputFolder, map, defsyms);
-                Console.Write(log);
+                try
+                {
+                    string log = ModuleBuilder.BuildRel(target, outputFolder, defsyms);
+                    Console.Write(log);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {target}");
+                }
             });
         }
         private static void GenMapsForTargets(string outputFolder)

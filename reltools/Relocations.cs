@@ -1,4 +1,5 @@
 using BrawlLib.SSBB.ResourceNodes;
+using reltools.Symbols;
 using System;
 using System.Text.RegularExpressions;
 
@@ -6,7 +7,7 @@ namespace reltools
 {
     internal class RelTag
     {
-        public static readonly Regex TagRegex = new Regex("\\[(.*)\\((.+),(.+),\\s*\"*(\\w+)\"*\\s*\\)\\]", RegexOptions.Compiled);
+        public static readonly Regex TagRegex = new Regex("\\[(.*)\\((.+),(.+),\\s*\"*(\\w+)\"*\\s*(.*)\\)\\]", RegexOptions.Compiled);
         public RelTag(PPCRelType command, uint targetModule, int targetSection, string label)
         {
             this.Command = command;
@@ -69,6 +70,18 @@ namespace reltools
             }
         }
         private string _label;
+        public string Expression
+        {
+            get
+            {
+                return _expression;
+            }
+            set
+            {
+                _expression = value;
+            }
+        }
+        private string _expression;
 
         public static RelTag FromString(string input)
         {
@@ -76,11 +89,22 @@ namespace reltools
             if (m.Success)
             {
                 var command = (PPCRelType)Enum.Parse(typeof(PPCRelType), m.Groups[1].Value);
-                uint targetModule = Convert.ToUInt32(m.Groups[2].Value);
                 int targetSection = Convert.ToInt32(m.Groups[3].Value);
                 string value = m.Groups[4].Value;
-
-                return new RelTag(command, targetModule, targetSection, value);
+                uint targetModule = 0xFFFFFFFF;
+                if (m.Groups[2].Value.Contains("\""))
+                {
+                    targetModule = SymbolManager.GetModuleIDFromName(m.Groups[2].Value.Trim('\"'));
+                    if (targetModule == 0xffffffff)
+                        return null;
+                }
+                else
+                {
+                    targetModule = Convert.ToUInt32(m.Groups[2].Value);
+                }
+                var tag = new RelTag(command, targetModule, targetSection, value);
+                tag.Expression = m.Groups[5].Value;
+                return tag;
             }
 
             return null;
@@ -88,9 +112,16 @@ namespace reltools
 
         public override string ToString()
         {
-            return $"[{this.Command}({this.TargetModule}, {this.TargetSection}, \"{this.Label}\")]";
+            string module = SymbolManager.GetModuleNameFromID(this.TargetModule);
+            if (!string.IsNullOrWhiteSpace(module))
+            {
+                return $"[{this.Command}(\"{module}\", {this.TargetSection}, \"{this.Label}\")]";
+            }
+            else
+            {
+                return $"[{this.Command}({this.TargetModule}, {this.TargetSection}, \"{this.Label}\")]";
+            }
         }
-
     }
     public enum PPCRelType
     {

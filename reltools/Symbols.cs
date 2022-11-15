@@ -58,12 +58,14 @@ namespace reltools.Symbols
     }
     internal class ModuleMap
     {
-        public ModuleMap(uint moduleID)
+        public ModuleMap(uint moduleID, string name)
         {
             Sections = new Dictionary<int, SectionMap>();
             ModuleID = moduleID;
+            ModuleName = name;
         }
         public uint ModuleID { get; private set; }
+        public string ModuleName { get; private set; }
         private Dictionary<int, SectionMap> Sections { get; set; }
 
         public Symbol GetSymbol(int section, string name)
@@ -132,7 +134,7 @@ namespace reltools.Symbols
                 SectionMap curSection = null;
                 while (!reader.EndOfStream)
                 {
-                    string line = reader.ReadLine();
+                    string line = reader.ReadLine().Trim();
                     if (line.StartsWith(".section"))
                     {
                         if (curModule != null && curSection != null)
@@ -147,8 +149,19 @@ namespace reltools.Symbols
                         if (curModule != null)
                             modules.Add(curModule.ModuleID, curModule);
 
+                        string moduleName = Path.GetFileNameWithoutExtension(filepath);
                         string module = line.Split(' ').Where(x => !string.IsNullOrWhiteSpace(x)).Last().Trim();
-                        curModule = new ModuleMap(Convert.ToUInt32(module));
+                        if (line.Contains(','))
+                        {
+                            moduleName = line.Split(',').Where(x => !string.IsNullOrEmpty(x)).Last().Trim();
+                            module = line.Split(' ')[1].Split(',').Where(x => !string.IsNullOrWhiteSpace(x)).First().Trim();
+                        }
+                        else
+                        {
+                            module = line.Split(' ').Where(x => !string.IsNullOrWhiteSpace(x)).Last().Trim();
+                        }
+
+                        curModule = new ModuleMap(Convert.ToUInt32(module), moduleName);
                         Console.WriteLine($"{module} : {filepath}");
                         continue;
                     }
@@ -207,7 +220,7 @@ namespace reltools.Symbols
         public void AddSymbol(uint module, int section, Symbol sym, bool replace)
         {
             if (!Modules.ContainsKey(module))
-                AddModule(new ModuleMap(module));
+                AddModule(new ModuleMap(module, null));
 
             Modules[module].AddSymbol(section, sym, replace);
         }
@@ -219,16 +232,32 @@ namespace reltools.Symbols
         {
             return Modules[module].GetSymbols(section);
         }
+        public uint GetModuleIDFromName(string name)
+        {
+            var map = Modules.Values.FirstOrDefault(x => x.ModuleName == name);
+            if (map != null)
+                return map.ModuleID;
+            else
+                return 0xffffffff;
+        }
+        public string GetModuleNameFromID(uint ID)
+        {
+            var map = Modules.Values.FirstOrDefault(x => x.ModuleID == ID);
+            if (map != null)
+                return map.ModuleName;
+            else
+                return null;
+        }
     }
-    public static class SymbolUtils
+    internal static class SymbolManager
     {
+        public static SymbolMap Map;
         public static string MangleSymbol(int moduleID, int sectionID, string symbol)
         {
             string module = moduleID.ToString();
             string section = sectionID.ToString();
             return $"__M{module.Length}{module}S{section.Length}{section}L{symbol.Length}{symbol}";
         }
-
         public static string DemangleSymbol(string symbol)
         {
             var matches = Regex.Matches(symbol, @"([MSL]{1}\d+)");
@@ -238,6 +267,14 @@ namespace reltools.Symbols
                 return symbol.Substring(matches[2].Index + matches[2].Length, len);
             }
             return symbol;
+        }
+        public static uint GetModuleIDFromName(string name)
+        {
+            return Map.GetModuleIDFromName(name);
+        }
+        public static string GetModuleNameFromID(uint ID)
+        {
+            return Map.GetModuleNameFromID(ID);
         }
     }
 }

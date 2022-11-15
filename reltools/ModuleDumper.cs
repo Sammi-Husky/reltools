@@ -15,11 +15,11 @@ namespace reltools
 {
     internal class ModuleDumper
     {
-        public ModuleDumper(RELNode node, SymbolMap map = null)
+        public ModuleDumper(RELNode node)
         {
             _node = node;
             LogOutput = new StringBuilder();
-            _labelMap = map ?? new SymbolMap();
+            _labelMap = SymbolManager.Map;
             _labelMap.AddSymbol(node.ModuleID, (int)node.PrologSection, new Symbol(node._prologOffset, "__entry"), true);
             _labelMap.AddSymbol(node.ModuleID, (int)node.EpilogSection, new Symbol(node._epilogOffset, "__exit"), true);
             _labelMap.AddSymbol(node.ModuleID, (int)node.UnresolvedSection, new Symbol(node._unresolvedOffset, "__unresolved"), true);
@@ -54,11 +54,6 @@ namespace reltools
         {
             ModuleDumper dumper = new ModuleDumper(node);
             return dumper.DumpRel(outputFolder);
-        }
-        public static string DumpRel(RELNode node, string outpuFolder, SymbolMap labelMap)
-        {
-            ModuleDumper dumper = new ModuleDumper(node, labelMap);
-            return dumper.DumpRel(outpuFolder);
         }
         public static unsafe string GenerateMap(RELNode node)
         {

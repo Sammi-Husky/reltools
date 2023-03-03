@@ -251,7 +251,20 @@ namespace reltools.Symbols
     }
     internal static class SymbolManager
     {
-        public static SymbolMap Map;
+        public static SymbolMap Map
+        {
+            get
+            {
+                if (_map == null)
+                {
+                    _map = new SymbolMap();
+                }
+
+                return _map;
+            }
+            set { _map = value; }
+        }
+        private static SymbolMap _map;
         public static string MangleSymbol(int moduleID, int sectionID, string symbol)
         {
             string module = moduleID.ToString();

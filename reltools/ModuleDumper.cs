@@ -13,11 +13,21 @@ using System.Text;
 
 namespace reltools
 {
+    [Flags]
+    public enum DumpOptions
+    {
+        DUMP_STRINGS = 0b00000010,
+        DUMP_FLOATS = 0b00000100,
+        USE_SECTION_NAMES = 0b00001000,
+        DEFAULT = 0,
+    }
     internal class ModuleDumper
     {
-        public ModuleDumper(RELNode node)
+        public ModuleDumper(RELNode node) : this(node, DumpOptions.DEFAULT) { }
+        public ModuleDumper(RELNode node, DumpOptions options)
         {
             _node = node;
+            Options = options;
             LogOutput = new StringBuilder();
             _labelMap = SymbolManager.Map;
             _labelMap.AddSymbol(node.ModuleID, (int)node.PrologSection, new Symbol(node._prologOffset, "__entry"), true);
@@ -49,7 +59,14 @@ namespace reltools
 
         private StringBuilder LogOutput { get; set; }
 
+        private DumpOptions Options { get; set; }
+
         #region static methods
+        public static string DumpRel(RELNode node, string outputFolder, DumpOptions options)
+        {
+            ModuleDumper dumper = new ModuleDumper(node, options);
+            return dumper.DumpRel(outputFolder);
+        }
         public static string DumpRel(RELNode node, string outputFolder)
         {
             ModuleDumper dumper = new ModuleDumper(node);
@@ -138,16 +155,23 @@ namespace reltools
             };
 
             LogOutput.AppendLine($"Unpacking: {Node.FilePath}:");
+
+            if (Node.Sections.Length <= 0)
+            {
+                LogOutput.AppendLine("Module has no sections! Aborting");
+                return LogOutput.ToString();
+            }
+
             for (int i = 0; i < Node.Sections.Length; i++)
             {
                 var section = Node.Sections[i];
 
                 string sectionFN = $"Section[{i}].asm";
-                // While it would be more correct to name the sections
-                // after what they really are, it would be confusing
-                // for brawl modders to sudenly switch after all this time
-                //if (i < SectionNames.Length)
-                //    sectionFN = $"{SectionNames[i]}.asm";
+                if ((Options & DumpOptions.USE_SECTION_NAMES) != 0)
+                {
+                    if (i < SectionNames.Length)
+                        sectionFN = $"{SectionNames[i]}.asm";
+                }
 
                 string sectionFP = Path.Combine(outputFolder, sectionFN);
 
@@ -206,7 +230,7 @@ namespace reltools
                     var command = node._manager.GetCommand(i);
                     var linked = node._manager.GetLinked(i);
                     Symbol sym = LabelMap.GetSymbol(node.ModuleID, node.Index, (uint)i * 4);
-                    //bool needsAlign = false;
+                    bool needsAlign = false;
 
                     // if this location is referenced write the label for it
                     if (sym != null)
@@ -218,60 +242,115 @@ namespace reltools
                         sb.AppendLine($"loc_{i * 4:X}:");
                     }
 
-                    string dataStr = $"    .4byte 0x{data:X8}";
+                    string dataStr = "";
+                    if ((Options & DumpOptions.DUMP_STRINGS) != 0)
+                    {
+                        if (string.IsNullOrEmpty(dataStr))
+                            dataStr = TryDumpString(addr, ref i, ref needsAlign);
+                    }
+                    if ((Options & DumpOptions.DUMP_FLOATS) != 0)
+                    {
+                        if (string.IsNullOrEmpty(dataStr))
+                            dataStr = TryDumpFloat(addr, ref i);
+                    }
 
-                    //// is data at addr a string?
-                    //byte tmp = *(byte*)(addr + i * 4);
-                    //if (Util.IsAscii(tmp))
-                    //{
-                    //    int x = 0;
-                    //    List<char> chars = new List<char>();
-                    //    while (tmp != 0 && Util.IsAscii(tmp))
-                    //    {
-                    //        chars.Add((char)tmp);
-                            
-                    //        x++;
-                    //        tmp = *(byte*)(addr + x + (i * 4));
-                    //    }
-
-                    //    // threshold
-                    //    if (chars.Count >= 4)
-                    //    {
-                    //        dataStr = $"    .asciz \"{new string(chars.ToArray())}\"";
-                    //        if (x % 4 > 0)
-                    //        {
-                    //            x = x.RoundUp(4);
-                    //            needsAlign = true;
-                    //        }
-                    //        i += (x / 4) - 1; // subtract one as for loop will advance the index itself
-                    //    }
-                    //}
-
+                    if (string.IsNullOrEmpty(dataStr))
+                        dataStr = $"    .4byte 0x{data:X8}";
 
                     // write relocation tag to end of line
                     if (command != null)
                     {
-                        Symbol relSymbol = LabelMap.GetSymbol(command._moduleID, (int)command.TargetSectionID, command.TargetOffset);
-                        var tag = new RelTag(command, relSymbol?.Name ?? $"loc_{ command.TargetOffset:X}");
-                        sb.AppendLine($"    {dataStr,-30}{tag}");
-                    }
-                    else
-                    {
-                        sb.AppendLine($"    {dataStr}");
+                        uint offsetAdjusted = command.TargetOffset.RoundDown(4);
+                        Symbol relSymbol = LabelMap.GetSymbol(command._moduleID, (int)command.TargetSectionID, offsetAdjusted);
+
+                        string name = relSymbol?.Name ?? $"loc_{ offsetAdjusted:X}";
+                        RelTag tag = new RelTag(command, name);
+
+                        if (command.TargetOffset != offsetAdjusted)
+                        {
+                            tag.Expression = $" + {command.TargetOffset % 4}";
+                        }
+
+                        dataStr = $"{dataStr,-30}{tag}";
                     }
 
-                    //if (needsAlign)
-                    //{
-                    //    sb.AppendLine("        .balign 4");
-                    //}
+                    sb.AppendLine($"    {dataStr}");
+
+                    if (needsAlign)
+                    {
+                        sb.AppendLine("        .balign 4");
+                    }
 
                 }
                 writer.Write(sb.ToString());
             }
         }
+        private unsafe string TryDumpFloat(VoidPtr addr, ref int i)
+        {
+            byte data = *(byte*)(addr + i * 4);
+            float f = *(bfloat*)(addr + i * 4);
+
+            // no valid floats start with 0x0
+            if (((data & 0xF0) >> 4) == 0)
+                return "";
+
+            // try to limit to sensible
+            // max and min values for detection.
+            // also don't disassemble 0 because
+            // it could just be an integer
+            if ((f > 0 || f < 0) && (f < 10000000f || f > -10000000f))
+            {
+                return $"    .float {f}";
+            }
+            return "";
+        }
+        private unsafe string TryDumpString(VoidPtr addr, ref int i, ref bool needsAlign)
+        {
+            string dataStr = "";
+            // is data at addr a string?
+            byte tmp = *(byte*)(addr + i * 4);
+            if (Util.IsAscii(tmp))
+            {
+                int x = 0;
+                List<string> chars = new List<string>();
+                while (tmp != 0)
+                {
+                    if (!Util.IsAscii(tmp))
+                        return "";
+
+                    char c = (char)tmp;
+
+                    chars.Add(c.ToString());
+
+                    x++;
+                    tmp = *(byte*)(addr + x + (i * 4));
+                }
+                x++; // count null terminator
+
+                // threshold
+                if (chars.Count >= 4)
+                {
+                    dataStr = $"    .asciz \"{string.Join("", chars)}\"";
+                    if (x % 4 > 0)
+                    {
+                        x = x.RoundUp(4);
+                        needsAlign = true;
+                    }
+                    i += (x / 4) - 1; // subtract one as for loop will advance the index itself
+                }
+            }
+            return dataStr;
+        }
         private unsafe void DumpCode(ModuleSectionNode node, string filepath)
         {
             var lines = GetAsm(node);
+
+            if(lines.Length == 0)
+            {
+                LogOutput.AppendLine("Failed to get ASM!");
+                throw new Exception("Failed to disassembly target");
+            }
+
             using (var writer = File.CreateText(filepath))
             {
                 StringBuilder sb = new StringBuilder();

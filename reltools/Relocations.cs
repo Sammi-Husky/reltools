@@ -115,11 +115,11 @@ namespace reltools
             string module = SymbolManager.GetModuleNameFromID(this.TargetModule);
             if (!string.IsNullOrWhiteSpace(module))
             {
-                return $"[{this.Command}(\"{module}\", {this.TargetSection}, \"{this.Label}\")]";
+                return $"[{this.Command}(\"{module}\", {this.TargetSection}, \"{this.Label}\"{this.Expression})]";
             }
             else
             {
-                return $"[{this.Command}({this.TargetModule}, {this.TargetSection}, \"{this.Label}\")]";
+                return $"[{this.Command}({this.TargetModule}, {this.TargetSection}, \"{this.Label}\"{this.Expression})]";
             }
         }
     }

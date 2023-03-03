@@ -24,7 +24,7 @@ namespace reltools
 
         private static string output = null;
         private static APP_MODE mode = APP_MODE.DUMP;
-
+        private static DumpOptions options = DumpOptions.DEFAULT;
         public static void Main(string[] args)
         {
             if (args.Length < 1 || ParseArguments(args))
@@ -62,18 +62,15 @@ namespace reltools
                 targets.Clear();
                 targets.AddRange(GatherFiles(folder, "*.rel", true));
             }
-            Parallel.ForEach(targets, target =>
-            {
-                Console.WriteLine(target);
-                RELNode node = (RELNode)NodeFactory.FromFile(null, target);
-                ModuleDumper d = new ModuleDumper(node);
-                string log = d.DumpRel(Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)));
-                //string log = ModuleDumper.DumpRel(node, Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)), map);
 
-                // race condition where linked branches will be
-                // null or 0 if we don't do this?????
-                node.Dispose();
-            });
+            foreach (var target in targets)
+            {
+                DumpTarget(target, outputFolder);
+            }
+            //Parallel.ForEach(targets, target =>
+            //{
+                //DumpTarget(target, outputFolder);
+            //});
         }
         private static void BuildTargets(string outputFolder)
         {
@@ -86,20 +83,40 @@ namespace reltools
                 targets.Clear();
                 targets.AddRange(GatherFiles(folder, "*.json", true));
             }
-
-            // run builds in parallel for speed
-            Parallel.ForEach(targets, target =>
+            foreach(var target in targets)
             {
-                try
-                {
-                    string log = ModuleBuilder.BuildRel(target, outputFolder, defsyms);
-                    Console.Write(log);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error: {target}");
-                }
-            });
+                BuildTarget(target, outputFolder);
+            }
+            // run builds in parallel for speed
+            //Parallel.ForEach(targets, target =>
+            //{
+                //BuildTarget(target, outputFolder);
+            //});
+        }
+        private static void BuildTarget(string target, string outputFolder)
+        {
+            try
+            {
+                string log = ModuleBuilder.BuildRel(target, outputFolder, defsyms);
+                Console.Write(log);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {target}");
+            }
+        }
+        private static void DumpTarget(string target, string outputFolder)
+        {
+            Console.WriteLine(target);
+            RELNode node = (RELNode)NodeFactory.FromFile(null, target);
+            ModuleDumper d = new ModuleDumper(node, options);
+            string log = d.DumpRel(Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)));
+            Console.Write(log);
+            //string log = ModuleDumper.DumpRel(node, Path.Combine(outputFolder, Path.GetFileNameWithoutExtension(target)), map);
+
+            // race condition where linked branches will be
+            // null or 0 if we don't do this?????
+            node.Dispose();
         }
         private static void GenMapsForTargets(string outputFolder)
         {
@@ -249,6 +266,15 @@ namespace reltools
                             defsyms.Add(args[++i]);
                         }
                         break;
+                    case "--strings":
+                        options |= DumpOptions.DUMP_STRINGS;
+                        break;
+                    case "--floats":
+                        options |= DumpOptions.DUMP_FLOATS;
+                        break;
+                    case "--use-section-names":
+                        options |= DumpOptions.USE_SECTION_NAMES;
+                        break;
                     default:
                         targets.Add(args[i]);
                         break;
@@ -264,7 +290,10 @@ namespace reltools
         private static void PrintHelp()
         {
             Console.WriteLine("reltools: Copyright (c) SammiHusky 2021-2022");
-            Console.WriteLine("options:");
+            
+            Console.WriteLine("\nUsage: reltools.exe [options] [targets]\n");
+            
+            Console.WriteLine("General Options:");
             Console.WriteLine("  -x, --extract [file(s)/folder]: (default)");
             Console.WriteLine("      Extracts and dissassembles rel file(s) to text files.");
             Console.WriteLine("  -r, --rebuild:");
@@ -278,7 +307,14 @@ namespace reltools
             Console.WriteLine("  -D, --def [symbol]:");
             Console.WriteLine("      Defines 'symbol' and passes it to the assembler when rebuilding. " +
                               "      Example: \"-D Release\" will define symbol \"Release\". Used in conditional statements(.ifdef/.endif)");
-            Console.WriteLine("\nUsage: reltools.exe [options] [targets]");
+
+            Console.WriteLine("\nExtraction Options:");
+            Console.WriteLine("  --strings:");
+            Console.WriteLine("      Attempts to detect and disassemble strings for output");
+            Console.WriteLine("  --floats:");
+            Console.WriteLine("      Attempts to detect and disassemble floating point numbers for output");
+            Console.WriteLine("  --use-section-names:");
+            Console.WriteLine("      Uses standard section naming scheme instead of 'Section[x]'");
         }
         private static string[] GatherFiles(string directory, string pattern, bool recursive)
         {

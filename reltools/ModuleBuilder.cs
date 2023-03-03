@@ -221,7 +221,7 @@ namespace reltools
             ProcResult asResult = Util.StartProcess("lib/powerpc-eabi-as.exe",
                                                     "-mgekko",
                                                     "-mregnames",
-                                                    $"-alc={tmpLst}",
+                                                    $"-alc=\"{tmpLst}\"",
                                                     "--listing-rhs-width=900",
                                                     $"{_defs}",
                                                     $"\"{tmpSrc}\"",
@@ -230,8 +230,8 @@ namespace reltools
             // copy instruction bytes to raw bin file
             ProcResult cpResult = Util.StartProcess("lib/powerpc-eabi-objcopy.exe",
                                                     $"-O binary",
-                                                    $"{tmpBin}",
-                                                    $"{tmpOut}");
+                                                    $"\"{tmpBin}\"",
+                                                    $"\"{tmpOut}\"");
 
 
             if (asResult.ExitCode == 0 && cpResult.ExitCode == 0)

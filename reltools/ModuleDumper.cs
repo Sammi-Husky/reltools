@@ -113,7 +113,7 @@ namespace reltools
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = Path.Combine(Path.GetDirectoryName(tmp), "lib/vdappc.exe"),
-                    Arguments = $"{tmpPath} 0",
+                    Arguments = $@"""{tmpPath}"" 0",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -344,11 +344,10 @@ namespace reltools
         private unsafe void DumpCode(ModuleSectionNode node, string filepath)
         {
             var lines = GetAsm(node);
-
-            if(lines.Length == 0)
+            if (lines.Length == 0)
             {
                 LogOutput.AppendLine("Failed to get ASM!");
-                throw new Exception("Failed to disassembly target");
+                return;
             }
 
             using (var writer = File.CreateText(filepath))

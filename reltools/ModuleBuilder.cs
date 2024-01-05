@@ -33,7 +33,7 @@ namespace reltools
             this.RootPath = Path.GetDirectoryName(jsonFilepath);
             this.LocalLabels = new Dictionary<string, SDefLine>();
             this.Tags = new List<(SDefLine, RelTag)>();
-            this.RawTags = new Dictionary<int, string>();
+            this.LocalTags = new Dictionary<int, string>();
             this.LogOutput = new StringBuilder();
         }
 
@@ -59,7 +59,7 @@ namespace reltools
         /// <summary>
         /// Map of line numbers to raw relocation tags
         /// </summary>
-        private Dictionary<int, string> RawTags { get; set; }
+        private Dictionary<int, string> LocalTags { get; set; }
         /// <summary>
         /// Information about the rel file to build
         /// </summary>
@@ -92,8 +92,7 @@ namespace reltools
             LogOutput.AppendLine("    Parsing section definitions");
             for (int sectionID = 0; sectionID < Info.Sections.Count; sectionID++)
             {
-                RawTags.Clear();
-                Tags.Clear();
+                LocalTags.Clear();
 
                 // even empty sections need a manager or brawllib will throw a fit
                 ModuleSectionNode s = new ModuleSectionNode(0)
@@ -138,14 +137,14 @@ namespace reltools
                     }
                 }
 
-                // link all relocations
-                foreach ((SDefLine line, RelTag tag) in Tags)
-                {
-                    AddCommandToSection(tag, line, s);
-                }
-
                 n._sections[sectionID] = s;
                 n.AddChild(s);
+            }
+
+            // link all relocations
+            foreach ((SDefLine line, RelTag tag) in Tags)
+            {
+                AddCommandToSection(tag, line, n.Sections[line.section]);
             }
 
             n._prologOffset = LocalLabels["__entry"].offset;
@@ -183,7 +182,7 @@ namespace reltools
                 Match m = RelTag.TagRegex.Match(line);
                 if (m.Success)
                 {
-                    RawTags.Add(i, m.Value);
+                    LocalTags.Add(i, m.Value);
                     lines[i] = RelTag.TagRegex.Replace(line, $"#!RT![{i}]");
                 }
 
@@ -324,7 +323,7 @@ namespace reltools
                         if (m.Success)
                         {
                             int index = Convert.ToInt32(m.Groups[1].Value);
-                            string raw = RawTags[index];
+                            string raw = LocalTags[index];
                             //var tag = raw.Substring(raw.IndexOf('['), raw.IndexOf("]") - raw.IndexOf('[') + 1);
                             var t = (sdefLine, RelTag.FromString(raw));
                             Tags.Add(t);

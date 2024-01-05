@@ -95,15 +95,8 @@ namespace reltools
         }
         private static void BuildTarget(string target, string outputFolder)
         {
-            try
-            {
                 string log = ModuleBuilder.BuildRel(target, outputFolder, defsyms);
                 Console.Write(log);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {target}");
-            }
         }
         private static void DumpTarget(string target, string outputFolder)
         {

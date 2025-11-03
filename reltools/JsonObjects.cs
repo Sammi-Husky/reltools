@@ -15,6 +15,7 @@ namespace reltools.json
     {
         public string Name;
         public string Type;
+        public int Version;
         public int ModuleID;
         public int ModuleAlign;
         public int BSSAlign;

@@ -27,7 +27,7 @@ namespace reltools
         {
             string json = File.ReadAllText(jsonFilepath);
 
-            this.Info = (RelInfo)JsonConvert.DeserializeObject(json, typeof(RelInfo));
+            this.Info = JsonConvert.DeserializeObject<RelInfo>(json);
             this.SymbolMap = SymbolManager.Map;
             this.Defines = defines ?? Array.Empty<string>();
             this.RootPath = Path.GetDirectoryName(jsonFilepath);
@@ -80,7 +80,7 @@ namespace reltools
             {
                 Name = Info.Name,
                 _id = (uint)Info.ModuleID,
-                _version = 3,
+                _version = Info.Version > 0 ? (uint)Info.Version : 3,
                 _fixSize = (uint)Info.FixSize,
                 _moduleAlign = (uint)Info.ModuleAlign,
                 _bssAlign = (uint)Info.BSSAlign,
@@ -147,14 +147,32 @@ namespace reltools
                 AddCommandToSection(tag, line, n.Sections[line.section]);
             }
 
+            // Build the special function offsets
+            // Prolog:
+            if (!LocalLabels.ContainsKey("__entry"))
+                throw new Exception("No __entry label found!");
+
             n._prologOffset = LocalLabels["__entry"].offset;
             n._prologSection = (byte)LocalLabels[$"__entry"].section;
 
+            // Epilog:
+            if (!LocalLabels.ContainsKey("__exit"))
+                throw new Exception("No __exit label found!");
+            
             n._epilogOffset = LocalLabels["__exit"].offset;
             n._epilogSection = (byte)LocalLabels[$"__exit"].section;
 
-            n._unresolvedOffset = LocalLabels["__unresolved"].offset;
-            n._unresolvedSection = (byte)LocalLabels[$"__unresolved"].section;
+            // Unresolved:
+            // NOTE: Some games don't populate unresolved. Don't throw in case it's missing.
+            if (LocalLabels.ContainsKey("__unresolved"))
+            {
+                n._unresolvedOffset = LocalLabels["__unresolved"].offset;
+                n._unresolvedSection = (byte)LocalLabels[$"__unresolved"].section;
+            }
+            else
+            {
+                LogOutput.AppendLine("    Warning: No __unresolved function found!");
+            }
 
 
             // build the rel file and export

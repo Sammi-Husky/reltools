@@ -147,6 +147,7 @@ namespace reltools
             {
                 Name = relname,
                 Type = "rel",
+                Version = (int)Node.Version,
                 ModuleID = (int)Node.ModuleID,
                 ModuleAlign = (int)Node.ModuleAlign,
                 BSSAlign = (int)Node.BSSAlign,
